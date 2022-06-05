@@ -34,6 +34,7 @@ async function run() {
         const bookingCollection = client.db('doctors-portal').collection('booking');
         const userCollection = client.db('doctors-portal').collection('user');
         const doctorCollection = client.db('doctors-portal').collection('doctors');
+        const paymentCollection = client.db('doctors-portal').collection('payment');
 
         console.log('database connected');
 
@@ -93,14 +94,14 @@ async function run() {
         app.post("/create-payment-intent", verifyJWT, async (req, res) => {
             const service = req.body;
             const price = service.price;
-            const amount = price*100;
+            const amount = price * 100;
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: amount,
                 currency: "usd",
-                payment_method_types:['card']
+                payment_method_types: ['card']
             });
 
-            res.send({clientSecret: paymentIntent.client_secret});
+            res.send({ clientSecret: paymentIntent.client_secret });
         });
 
 
@@ -160,10 +161,26 @@ async function run() {
 
         app.get('/booking/:id', verifyJWT, async (req, res) => {
             const id = req.params.id;
-            const query = {_id: ObjectId(id)};
+            const query = { _id: ObjectId(id) };
             const booking = await bookingCollection.findOne(query);
             res.send(booking);
-        })
+        });
+
+        app.patch('/booking/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const payment = req.body;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    transactionId: payment.transactionId
+                }
+            }
+
+            const result = await paymentCollection.insertOne(payment);
+            const updatedBooking = await bookingCollection.updateOne(filter, updatedDoc);
+            res.send(updatedBooking, result);
+        });
 
         //doctor
         app.get('/doctor', verifyJWT, verifyAdmin, async (req, res) => {
@@ -176,10 +193,10 @@ async function run() {
             const result = await doctorCollection.insertOne(doctor);
             res.send(result);
         });
-        
+
         app.delete('/doctor/:email', verifyJWT, verifyAdmin, async (req, res) => {
             const email = req.params.email;
-            const cursor = {email: email}
+            const cursor = { email: email }
             const result = await doctorCollection.deleteOne(cursor);
             res.send(result);
         });
